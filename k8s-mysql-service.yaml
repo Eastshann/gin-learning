@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webook-live-mysql
+spec:
+  selector:
+    app: webook-live-mysql
+  ports:
+    - protocol: TCP
+      port: 3309          # 集群内部端口
+      targetPort: 3306    # 容器内部端口
+      nodePort: 30001     # 外部端口
+  type: NodePort
+  

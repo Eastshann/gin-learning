@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: my-local-pv
+spec:
+  storageClassName:  manual
+  capacity:
+    storage: 1Gi
+  accessModes:  # 声明底层存储具体支持哪些读写模式。
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/host/f/Projects/Go/gin_learning/mysql-live"
