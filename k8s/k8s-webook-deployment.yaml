@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: webook-live-dpm     # 唯一身份证号
 spec:
-  replicas: 3           # 副本数量
+  replicas: 1           # 副本数量
   selector:             # 筛选器，根据标签/名牌，寻找 POD 进行管理
     matchLabels:
       app: webook-live

@@ -8,5 +8,5 @@ spec:
     storage: 1Gi
   accessModes:  # 声明底层存储具体支持哪些读写模式。
     - ReadWriteOnce
-  hostPath:
-    path: "/mnt/host/f/Projects/Go/gin_learning/mysql-live"
+  hostPath: # 宿主机上的物理路径
+    path: "/mnt/host/e/projects/go/mount/gin-learning/mysql"
