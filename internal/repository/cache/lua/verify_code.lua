@@ -12,10 +12,10 @@ if cnt == nil or cnt <= 0 then
 end
 
 if code == expectedCode then
-    redis.call("set", cntKey, 0)
+    redis.call("set", cntKey, 0) -- 验证成功，次数归 0
     return 0
 else
-    redis.call("decr", cntKey)
+    redis.call("decr", cntKey) -- 验证失败，次数减 1
     -- 不相等，用户输错了
     return -2
 end

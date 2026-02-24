@@ -8,7 +8,7 @@ if ttl == -1 then
     --    key 存在，但是没有过期时间
     return -2
 elseif ttl == -2 or ttl < 540 then
-    --    可以发验证码
+    --    key 不存在，或者距离上次发送已经超过了 60 秒，可以发验证码
     redis.call("set", key, val)
     -- 600 秒
     redis.call("expire", key, 600)
@@ -16,6 +16,6 @@ elseif ttl == -2 or ttl < 540 then
     redis.call("expire", cntKey, 600)
     return 0
 else
-    -- 发送太频繁
+    -- 距离上次发送不超过 60 秒，发送太频繁
     return -1
 end
