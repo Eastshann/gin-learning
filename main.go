@@ -3,32 +3,42 @@ package main
 import (
 	"gin_learning/config"
 	"gin_learning/internal/repository"
+	"gin_learning/internal/repository/cache"
 	"gin_learning/internal/repository/dao"
 	"gin_learning/internal/service"
+	"gin_learning/internal/service/sms/local_sms"
 	"gin_learning/internal/web"
 	"gin_learning/internal/web/middleware"
+	"log"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/redis"
+	redisSession "github.com/gin-contrib/sessions/redis"
 
-	//"github.com/gin-contrib/sessions/redis"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
-func initUser(db *gorm.DB, server *gin.Engine) {
+func initUser(db *gorm.DB, rdb redis.Cmdable, server *gin.Engine) {
 	ud := dao.NewUserDAO(db)
-	repo := repository.NewUserRepository(ud)
+	uc := cache.NewUserCache(rdb)
+	repo := repository.NewUserRepository(ud, uc)
 	svc := service.NewUserService(repo)
-	u, err := web.NewUserHandler(svc)
+
+	codeCache := cache.NewCodeCache(rdb)
+	codeRepo := repository.NewCodeRepository(codeCache)
+	smsSvc := local_sms.NewService()
+	codeSvc := service.NewCodeService(codeRepo, smsSvc)
+
+	u, err := web.NewUserHandler(svc, codeSvc)
 	if err != nil {
 		panic(err)
 	}
-
-	u.RegisterRoutersV2(server.Group("/users"))
+	u.RegisterRoutersV1(server)
 }
 
 func initDB() *gorm.DB {
@@ -36,6 +46,7 @@ func initDB() *gorm.DB {
 	if err != nil {
 		// 只在初始化过程中 panic
 		// panic 相当于整个 goroutine 结束
+		log.Printf("数据库连接错误：%v", config.Config.DB.DSN)
 		panic(err)
 	}
 	err = dao.InitTable(db)
@@ -44,6 +55,12 @@ func initDB() *gorm.DB {
 	}
 
 	return db
+}
+
+func InitRedis() redis.Cmdable {
+	return redis.NewClient(&redis.Options{
+		Addr: config.Config.Redis.Addr,
+	})
 }
 
 func initWebServer() *gin.Engine {
@@ -72,7 +89,7 @@ func initWebServer() *gin.Engine {
 }
 
 func useSession(server *gin.Engine) {
-	store, err := redis.NewStore(16, "tcp", "localhost:6378", "", "",
+	store, err := redisSession.NewStore(16, "tcp", "localhost:6378", "", "",
 		[]byte("U5rRMiqk12W0KGEh1YVry64U7ruRDLAm"),
 		[]byte("5HivTKFUdMHsrcviM5aLrvNECAu42WNb"))
 
@@ -96,8 +113,10 @@ func useSession(server *gin.Engine) {
 
 func useJWT(server *gin.Engine) {
 	server.Use(middleware.NewLoginJWTMiddlewareBuilder().
-		IgnorePaths("/users/loginjwt").
 		IgnorePaths("/users/signup").
+		IgnorePaths("/users/login-jwt").
+		IgnorePaths("/users/login-sms/code/send").
+		IgnorePaths("/users/login-sms").
 		IgnorePaths("/hello").
 		CheckLogin())
 }
@@ -105,8 +124,9 @@ func useJWT(server *gin.Engine) {
 func main() {
 
 	db := initDB()
+	rdb := InitRedis()
 	server := initWebServer()
-	initUser(db, server)
+	initUser(db, rdb, server)
 
 	server.Run(":8080")
 }

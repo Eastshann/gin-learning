@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"gin_learning/internal/domain"
 	"gin_learning/internal/service"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 )
 
 var JWTKey = []byte("k6CswdUm77WKcbM68UQUuxVsHSpTCwgK")
+var biz = "login"
 
 type UserClaims struct {
 	jwt.RegisteredClaims
@@ -23,13 +23,14 @@ type UserClaims struct {
 
 type UserHandler struct {
 	svc                     *service.UserService
+	codeSvc                 *service.CodeService
 	emailRegexPattern       *regexp.Regexp
 	nameRegexPattern        *regexp.Regexp
 	birthdayRegexPattern    *regexp.Regexp
 	descriptionRegexPattern *regexp.Regexp
 }
 
-func NewUserHandler(svc *service.UserService) (*UserHandler, error) {
+func NewUserHandler(svc *service.UserService, codeSvc *service.CodeService) (*UserHandler, error) {
 	emailRe, err := regexp.Compile("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$")
 	nameRe, err := regexp.Compile("^.{1,15}$")
 	birthdayRe, err := regexp.Compile("^\\d{4}-\\d{2}-\\d{2}$")
@@ -38,7 +39,9 @@ func NewUserHandler(svc *service.UserService) (*UserHandler, error) {
 		return &UserHandler{}, err
 	}
 	return &UserHandler{
-		svc:                     svc,
+		svc:     svc,
+		codeSvc: codeSvc,
+		// 正则
 		emailRegexPattern:       emailRe,
 		nameRegexPattern:        nameRe,
 		birthdayRegexPattern:    birthdayRe,
@@ -49,18 +52,18 @@ func NewUserHandler(svc *service.UserService) (*UserHandler, error) {
 func (u *UserHandler) RegisterRoutersV1(server *gin.Engine) {
 	// 分组路由
 	ug := server.Group("/users")
+	// 注册登录
 	ug.POST("/signup", u.SignUp)
 	ug.POST("/login", u.Login)
+	ug.POST("/login-jwt", u.LoginJWT)
+	//验证码注册登录
+	ug.POST("login-sms/code/send", u.SendLoginSMSCode)
+	ug.POST("login-sms", u.LoginSMS)
+	// 编辑
 	ug.POST("/edit", u.Edit)
+	// 个人主页
 	ug.POST("/profile", u.Profile)
-}
 
-func (u *UserHandler) RegisterRoutersV2(ug *gin.RouterGroup) {
-	ug.POST("/signup", u.SignUp)
-	ug.POST("/login", u.Login)
-	ug.POST("/loginjwt", u.LoginJWT)
-	ug.POST("/edit", u.Edit)
-	ug.POST("/profile", u.Profile)
 }
 
 func (u *UserHandler) SignUp(ctx *gin.Context) {
@@ -101,7 +104,6 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 	}
 
 	ctx.String(http.StatusOK, "注册成功")
-	fmt.Printf("%v\n", req)
 }
 
 func (u *UserHandler) Login(ctx *gin.Context) {
@@ -172,6 +174,71 @@ func (u *UserHandler) LoginJWT(ctx *gin.Context) {
 	return
 }
 
+func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
+	type Req struct {
+		PhoneNumber string `json:"phone_number"`
+	}
+
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	const biz = "login"
+	err := u.codeSvc.Send(ctx, biz, req.PhoneNumber)
+	switch err {
+	case nil:
+		ctx.JSON(http.StatusOK, Result{
+			Code: 4,
+			Msg:  "验证码发送成功",
+		})
+		return
+	case service.ErrSendCodeTooMany:
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "验证码发送太频繁",
+		})
+		return
+	default:
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		return
+	}
+
+}
+
+func (u *UserHandler) LoginSMS(ctx *gin.Context) {
+	type Req struct {
+		PhoneNumber string `json:"phone_number"`
+		Code        string `json:"code"`
+	}
+	var req Req
+	if err := ctx.Bind(&req); err != nil {
+		return
+	}
+	ok, err := u.codeSvc.Verify(ctx, biz, req.PhoneNumber, req.Code)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "系统错误",
+		})
+		return
+	}
+	if !ok {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "验证码有误",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Code: 4,
+		Msg:  "验证码校验通过",
+	})
+	return
+}
+
 func (u *UserHandler) Edit(ctx *gin.Context) {
 	type EditReq struct {
 		Name        string `json:"name"`
@@ -209,11 +276,9 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 		// 尝试断言为 int（最常见情况）
 		if id, ok := val.(int); ok {
 			userId = int64(id)
-			fmt.Println("获取成功:", userId)
 		} else if id64, ok := val.(int64); ok {
 			// 预防某些驱动直接返回 int64
 			userId = id64
-			fmt.Println("获取成功:", userId)
 		}
 	}
 

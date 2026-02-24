@@ -50,7 +50,6 @@ func (l *LoginMiddlewareBuilder) CheckLogin() gin.HandlerFunc {
 			sess.Set(updateTimeKey, now)
 			sess.Set("userId", userId)
 			err := sess.Save()
-			fmt.Println("刷新session")
 			if err != nil {
 				// 打日志
 				fmt.Println(err)

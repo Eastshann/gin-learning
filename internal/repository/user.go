@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"gin_learning/internal/domain"
 	"gin_learning/internal/repository/cache"
 	"gin_learning/internal/repository/dao"
@@ -25,10 +26,7 @@ func NewUserRepository(dao *dao.UserDAO, c *cache.UserCache) *UserRepository {
 }
 
 func (repo *UserRepository) Create(ctx context.Context, u domain.User) error {
-	return repo.dao.Insert(ctx, dao.User{
-		Email:    u.Email,
-		Password: u.Password,
-	})
+	return repo.dao.Insert(ctx, repo.domainToEntity(u))
 }
 
 func (repo *UserRepository) FindByEmail(ctx context.Context, email string) (domain.User, error) {
@@ -36,11 +34,7 @@ func (repo *UserRepository) FindByEmail(ctx context.Context, email string) (doma
 	if err != nil {
 		return domain.User{}, err
 	}
-	return domain.User{
-		Id:       u.Id,
-		Email:    u.Email,
-		Password: u.Password,
-	}, nil
+	return repo.entityToDomain(u), nil
 }
 
 func (repo *UserRepository) FindById(ctx context.Context, id int64) (domain.User, error) {
@@ -55,11 +49,7 @@ func (repo *UserRepository) FindById(ctx context.Context, id int64) (domain.User
 	if err != nil {
 		return domain.User{}, err
 	}
-	u = domain.User{
-		Id:       ue.Id,
-		Email:    ue.Email,
-		Password: ue.Password,
-	}
+	u = repo.entityToDomain(ue)
 
 	// 存入缓存
 	err = repo.cache.Set(ctx, u)
@@ -73,4 +63,34 @@ func (repo *UserRepository) Update(ctx context.Context, u domain.User) error {
 		Birthday:    u.Birthday,
 		Description: u.Description,
 	})
+}
+
+func (repo *UserRepository) domainToEntity(u domain.User) dao.User {
+	return dao.User{
+		Id: u.Id,
+		Email: sql.NullString{
+			String: u.Email,
+			Valid:  u.Email != "",
+		},
+		Phone: sql.NullString{
+			String: u.Phone,
+			Valid:  u.Phone != "",
+		},
+		Password:    u.Password,
+		Name:        u.Name,
+		Birthday:    u.Birthday,
+		Description: u.Description,
+	}
+}
+
+func (repo *UserRepository) entityToDomain(u dao.User) domain.User {
+	return domain.User{
+		Id:          u.Id,
+		Email:       u.Email.String,
+		Phone:       u.Phone.String,
+		Password:    u.Password,
+		Name:        u.Name,
+		Birthday:    u.Birthday,
+		Description: u.Description,
+	}
 }

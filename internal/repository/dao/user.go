@@ -2,6 +2,7 @@ package dao
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"time"
 
@@ -80,8 +81,10 @@ func (dao *UserDAO) Edit(ctx context.Context, u User) error {
 // User 直接对应数据库表结构
 // 有些人叫做 entity, 有些人叫做 model, 有些人叫做 PO(persistent object)
 type User struct {
-	Id       int64  `gorm:"primaryKey,autoIncrement"`
-	Email    string `gorm:"unique"`
+	Id int64 `gorm:"primaryKey,autoIncrement"`
+
+	Email    sql.NullString `gorm:"unique"`
+	Phone    sql.NullString `gorm:"unique"`
 	Password string
 
 	Name        string
